@@ -110,13 +110,13 @@ namespace Nektar
 
     protected:
         /// bool to identify if spectral vanishing viscosity is active.
-        bool m_useHomo1DSpecVanVisc;
+        Array<OneD, bool> m_useHomo1DSpecVanVisc;
         /// bool to identify if spectral vanishing viscosity is active.
-        bool m_useSpecVanVisc;
+        Array<OneD, bool> m_useSpecVanVisc;
         /// cutt off ratio from which to start decayhing modes
-        NekDouble m_sVVCutoffRatio;
+        Array<OneD, NekDouble> m_sVVCutoffRatio;
         /// Diffusion coefficient of SVV modes
-        NekDouble m_sVVDiffCoeff;
+        Array<OneD, NekDouble> m_sVVDiffCoeff;
         /// Diffusion coefficients (will be kinvis for velocities)
         Array<OneD, NekDouble> m_diffCoeff;
 

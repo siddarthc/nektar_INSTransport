@@ -81,6 +81,12 @@ namespace Nektar
             ASSERTL0(false,"Need to set up pressure field definition");
         }
 
+         // Determine equations on which SVV is activated
+         m_useSpecVanVisc = Array<OneD, bool> (m_nConvectiveFields, false);
+         m_sVVCutoffRatio = Array<OneD, NekDouble> (m_nConvectiveFields, 0.75);
+         m_sVVDiffCoeff = Array<OneD, NekDouble> (m_nConvectiveFields, 0.1);
+         m_useHomo1DSpecVanVisc = Array<OneD, bool> (m_nConvectiveFields, false);
+  
         // Determine diffusion coefficients for each field
         m_diffCoeff = Array<OneD, NekDouble> (m_nConvectiveFields, m_kinvis);
         for (n = 0; n < m_nConvectiveFields; ++n)
@@ -91,6 +97,22 @@ namespace Nektar
                 LibUtilities::EquationSharedPtr ffunc
                     = m_session->GetFunction("DiffusionCoefficient", varName);
                 m_diffCoeff[n] = ffunc->Evaluate();
+            }
+
+            if (m_session->DefinesFunction("SVVCutoffRatio", varName))
+            {
+                m_useSpecVanVisc[n] = true;
+                LibUtilities::EquationSharedPtr ffunc
+                    = m_session->GetFunction("SVVcutoffRatio", varName);
+                m_sVVCutoffRatio[n] = ffunc->Evaluate();
+            }
+
+            if (m_session->DefinesFunction("SVVDiffCoeff", varName))
+            {
+                 ASSERTL0(m_useSpecVanVisc[n], "SVV cut off ratio is not set for the variable:" + varName);
+                LibUtilities::EquationSharedPtr ffunc
+                    = m_session->GetFunction("SVVDiffCoeff", varName);
+                m_sVVDiffCoeff[n] = ffunc->Evaluate();
             }
         }
 
@@ -123,14 +145,17 @@ namespace Nektar
                                                 NekConstants::kNekUnsetDouble);
 
         // Load parameters for Spectral Vanishing Viscosity
+/*
         m_session->MatchSolverInfo("SpectralVanishingViscosity","True",
                                    m_useSpecVanVisc,false);
         m_session->LoadParameter("SVVCutoffRatio",m_sVVCutoffRatio,0.75);
         m_session->LoadParameter("SVVDiffCoeff",  m_sVVDiffCoeff,  0.1);
         // Needs to be set outside of next if so that it is turned off by default
+
+
         m_session->MatchSolverInfo("SpectralVanishingViscosityHomo1D","True",
                                    m_useHomo1DSpecVanVisc,false);
-
+*/
         
         m_session->MatchSolverInfo("SPECTRALHPDEALIASING","True",
                                    m_specHP_dealiasing,false);
@@ -140,40 +165,49 @@ namespace Nektar
         {
             ASSERTL0(m_nConvectiveFields > 2,"Expect to have three velocity fields with homogenous expansion");
 
+/*
             if(m_useHomo1DSpecVanVisc == false)
             {
                 m_session->MatchSolverInfo("SpectralVanishingViscosity","True",m_useHomo1DSpecVanVisc,false);
             }
+*/
 
-            if(m_useHomo1DSpecVanVisc)
+            for (int i = 0; i < m_nConvectiveFields; ++i) 
             {
-                Array<OneD, unsigned int> planes;
-                planes = m_fields[0]->GetZIDs();
+               m_useHomo1DSpecVanVisc[i] = m_useSpecVanVisc[i];
+               
+               if(m_useHomo1DSpecVanVisc[i])
+               {
+                   Array<OneD, unsigned int> planes;
+                   planes = m_fields[0]->GetZIDs();
 
-                int num_planes = planes.num_elements();
-                Array<OneD, NekDouble> SVV(num_planes,0.0);
-                NekDouble fac;
-                int kmodes = m_fields[0]->GetHomogeneousBasis()->GetNumModes();
-                int pstart;
+                   int num_planes = planes.num_elements();
+                   Array<OneD, NekDouble> SVV(num_planes,0.0);
+                   NekDouble fac;
+                   int kmodes = m_fields[0]->GetHomogeneousBasis()->GetNumModes();
+                   int pstart;
+   
+                   pstart = m_sVVCutoffRatio[i]*kmodes;
+                   
+                   for(n = 0; n < num_planes; ++n)
+                   {
+                       if(planes[n] > pstart)
+                       {
+                           fac = (NekDouble)((planes[n] - kmodes)*(planes[n] - kmodes))/
+                               ((NekDouble)((planes[n] - pstart)*(planes[n] - pstart)));
+                           SVV[n] = m_sVVDiffCoeff[i]*exp(-fac)/m_diffCoeff[i];
+                       }
+                   }
 
-                pstart = m_sVVCutoffRatio*kmodes;
-                
-                for(n = 0; n < num_planes; ++n)
-                {
-                    if(planes[n] > pstart)
-                    {
-                        fac = (NekDouble)((planes[n] - kmodes)*(planes[n] - kmodes))/
-                            ((NekDouble)((planes[n] - pstart)*(planes[n] - pstart)));
-                        SVV[n] = m_sVVDiffCoeff*exp(-fac)/m_kinvis;
-                    }
-                }
-
-                for(int i = 0; i < m_velocity.num_elements(); ++i)
-                {
-                    m_fields[m_velocity[i]]->SetHomo1DSpecVanVisc(SVV);
-                }
-            }
-            
+/*
+                   for(int j = 0; j < m_velocity.num_elements(); ++j)
+                   {
+                       m_fields[m_velocity[j]]->SetHomo1DSpecVanVisc(SVV);
+                   }
+*/
+                   m_fields[i]->SetHomo1DSpecVanVisc(SVV);
+               }
+            }            
         }
 
         m_session->MatchSolverInfo("SmoothAdvection", "True", m_SmoothAdvection, false);
@@ -220,18 +254,21 @@ namespace Nektar
             SolverUtils::AddSummaryItem(s, "Dealiasing", dealias);
         }
 
-        string smoothing = m_useSpecVanVisc ? "spectral/hp" : "";
-        if (m_useHomo1DSpecVanVisc)
+        for (int i = 0; i< m_nConvectiveFields; ++i)
         {
-            smoothing += (smoothing == "" ? "" : " + ") + string("Homogeneous1D");
-        }
-        if (smoothing != "")
-        {
-            SolverUtils::AddSummaryItem(
-                s, "Smoothing", "SVV (" + smoothing + " SVV (cut-off = "
-                + boost::lexical_cast<string>(m_sVVCutoffRatio)
-                + ", diff coeff = "
-                + boost::lexical_cast<string>(m_sVVDiffCoeff)+")");
+            string smoothing = m_useSpecVanVisc[i] ? "spectral/hp" : "";
+            if (m_useHomo1DSpecVanVisc[i])
+            {
+                smoothing += (smoothing == "" ? "" : " + ") + string("Homogeneous1D");
+            }
+            if (smoothing != "")
+            {
+                SolverUtils::AddSummaryItem(
+                    s, "Smoothing for var " + m_session->GetVariable(i), "SVV (" + smoothing + " SVV (cut-off = "
+                    + boost::lexical_cast<string>(m_sVVCutoffRatio[i])
+                    + ", diff coeff = "
+                    + boost::lexical_cast<string>(m_sVVDiffCoeff[i])+")");
+            }
         }
     }
 
@@ -460,16 +497,24 @@ namespace Nektar
         const NekDouble aii_Dt)
     {
         StdRegions::ConstFactorMap factors;
-
+/*
         if(m_useSpecVanVisc)
         {
             factors[StdRegions::eFactorSVVCutoffRatio] = m_sVVCutoffRatio;
             factors[StdRegions::eFactorSVVDiffCoeff]   = m_sVVDiffCoeff/m_kinvis;
         }
+*/
 
         // Solve Helmholtz system and put in Physical space
         for(int i = 0; i < m_nConvectiveFields; ++i)
         {
+            // Setup SVV stuff
+            if(m_useSpecVanVisc[i])
+            {
+               factors[StdRegions::eFactorSVVCutoffRatio] = m_sVVCutoffRatio[i];
+               factors[StdRegions::eFactorSVVDiffCoeff]   = m_sVVDiffCoeff[i]/m_diffCoeff[i];
+            }
+
             // Setup coefficients for equation
             factors[StdRegions::eFactorLambda] = 1.0/aii_Dt/m_diffCoeff[i];
             m_fields[i]->HelmSolve(Forcing[i], m_fields[i]->UpdateCoeffs(),

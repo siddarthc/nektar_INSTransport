@@ -39,8 +39,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-using namespace std;
-
 namespace Nektar
 {
     string VCSMapping::className = 
@@ -611,16 +609,25 @@ namespace Nektar
             StdRegions::ConstFactorMap factors;
             factors[StdRegions::eFactorLambda] = 
                                     1.0*m_viscousRelaxation/aii_Dt/m_kinvis;
+/*
             if(m_useSpecVanVisc)
             {
                 factors[StdRegions::eFactorSVVCutoffRatio] = m_sVVCutoffRatio;
                 factors[StdRegions::eFactorSVVDiffCoeff]   = 
                                                       m_sVVDiffCoeff/m_kinvis;
             }
+*/
 
             // Calculate L2-norm of F and set initial solution for iteration
             for(int i = 0; i < nvel; ++i)
             {
+                if(m_useSpecVanVisc[i])
+                {
+                    factors[StdRegions::eFactorSVVCutoffRatio] = m_sVVCutoffRatio[i];
+                   factors[StdRegions::eFactorSVVDiffCoeff]   =
+                                                         m_sVVDiffCoeff[i]/m_kinvis;
+                } 
+
                 forcing_L2[i] = m_fields[0]->L2(Forcing[i],wk[0]);
                 m_fields[i]->BwdTrans(m_fields[i]->GetCoeffs(),
                                         previous_iter[i]);

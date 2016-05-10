@@ -148,6 +148,7 @@ namespace Nektar
         int m_infosteps;
         int m_minsubsteps;
         int m_maxsubsteps;
+        int m_nConvectiveFields;
     };
 }
 

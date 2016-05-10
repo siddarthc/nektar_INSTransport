@@ -36,8 +36,6 @@
 #include <IncNavierStokesSolver/EquationSystems/SubSteppingExtrapolate.h>
 #include <LibUtilities/Communication/Comm.h>
 
-using namespace std;
-
 namespace Nektar
 {
     /**
@@ -71,6 +69,7 @@ namespace Nektar
         }
         m_fields[0]->GetTrace()->GetNormals(m_traceNormals);
 
+        m_nConvectiveFields = m_fields.num_elements()-1;
     }
 
     SubSteppingExtrapolate::~SubSteppingExtrapolate()
@@ -190,7 +189,8 @@ namespace Nektar
 
         SubStepExtrapolateField(fmod(time,m_timestep), Velfields);
         
-        m_advObject->Advect(m_velocity.num_elements(), m_fields, Velfields, inarray, outarray, time);
+//        m_advObject->Advect(m_velocity.num_elements(), m_fields, Velfields, inarray, outarray, time);
+        m_advObject->Advect(m_nConvectiveFields, m_fields, Velfields, inarray, outarray, time);  
         
         for(i = 0; i < nVariables; ++i)
         {

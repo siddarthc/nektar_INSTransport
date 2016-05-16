@@ -241,9 +241,10 @@ namespace Nektar
         NekDouble kinvis)
     {
         int nConvectiveFields =m_fields.num_elements()-1;
-        Array<OneD, Array<OneD, NekDouble> > velfields(nConvectiveFields);
+        int nVel = m_velocity.num_elements();
+        Array<OneD, Array<OneD, NekDouble> > velfields(nVel);
         
-        for(int i = 0; i < nConvectiveFields; ++i)
+        for(int i = 0; i < nVel; ++i)
         {
             velfields[i] = m_fields[m_velocity[i]]->GetPhys(); 
         }
